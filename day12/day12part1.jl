@@ -1,4 +1,4 @@
-demo = false
+demo = true
 
 open(demo ? "day12/demoinput" : "day12/input", "r") do f # demoinput
     line = readline(f)
@@ -24,6 +24,10 @@ open(demo ? "day12/demoinput" : "day12/input", "r") do f # demoinput
         line = readline(f)
     end
 
+    #println("Start = $start : Exit = $theexit")
+    #println(theexit)
+    #display(connections)
+
     paths = []
     untouched = 0
     push!(paths, [start])
@@ -33,21 +37,13 @@ open(demo ? "day12/demoinput" : "day12/input", "r") do f # demoinput
         if last(p) == theexit
             pushfirst!(paths, p)
             untouched += 1
-            if demo
-                println("Path is complete: $p")
-            end
+            println("Path is complete: $p")
         else
             untouched = 0
             for c in connections[last(p)] # for each connection to last node
-                if c == uppercase(c)
+                if c in p && c == lowercase(c) # do nothing
+                else
                     push!(paths, [p [c]])
-                elseif !(c in p)
-                    push!(paths, [p [c]])
-                elseif c != start # this one isn't the start
-                    smallcaves = filter(x->x==lowercase(x), p)
-                    if length(Set(smallcaves)) == length(smallcaves) # check if a smallcave has been visited twice
-                        push!(paths, [p [c]])
-                    end
                 end
             end
         end
@@ -58,5 +54,5 @@ open(demo ? "day12/demoinput" : "day12/input", "r") do f # demoinput
         display(paths)
         println()
     end
-    println(length(paths)) # 93858
+    println(length(paths)) # 3708
 end
