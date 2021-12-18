@@ -1,4 +1,16 @@
-demo = true
+demo = false
+
+function xdistance(t, v)
+    if (t>=v)
+        return (v*(v+1)/2)
+    else
+        return (v*(v+1)/2) - ((v-t) * (v-t+1) / 2)
+    end
+end
+
+function ydistance(t, v)
+    return v * t - t*(t-1)/2
+end
 
 open(demo ? "day17/demoinput" : "day17/input", "r") do f # demoinput
     line = readline(f)
@@ -11,33 +23,53 @@ open(demo ? "day17/demoinput" : "day17/input", "r") do f # demoinput
     println(xrange)
     println(yrange)
 
-    done = false
-    xs = []
-    ys = []
-    time = 7
-    while !done
-        t = time
-        r = (2*xlower + t^2 - t) % (2*t)
-        r = r==0 ? 0 : 2*t-r
-        minvx = Int64((2*xlower + t^2 - t + r) / (2*t))
-        println("minvx = $minvx")
+    total = 0
+    combos = Set()
+    for time in 1:(1-2*ylower)
+        println("*** Time = $time ***")
+        xs = []
+        ys = []
+
+        # calculate y velocities
+        vymin = (ylower:-ylower)[searchsortedfirst(ylower:-ylower, 99999, lt=(v1,v2)->(ydistance(time, v1)<ylower))] # && xdistance(time, v2)<xlower))
+        println("vymin = $vymin, ydist = $(ydistance(time, vymin))")
+
+        vymax = (yupper:-ylower)[searchsortedfirst(yupper:-ylower, 99999, lt=(v1,v2)->(ydistance(time, v1)<yupper))] # && xdistance(time, v2)<xlower))
+        while ydistance(time, vymax) > yupper
+            vymax -= 1
+        end
+        println("vymax = $vymax, ydist = $(ydistance(time, vymax))")
+        if ylower <= ydistance(time, vymax) <= yupper && ylower <= ydistance(time, vymin) <= yupper 
+            append!(ys, vymin:vymax)
+            println("ys = $ys")
+            #println()
+        end
         
-        maxvx = Int64(trunc((2*xupper + t^2 - t) / (2*t)))
-        println("maxvx = $maxvx")
+        # calculate x velocities
+        vxmin = searchsortedfirst(1:xlower, 99999, lt=(v1,v2)->(xdistance(time, v1)<xlower)) # && xdistance(time, v2)<xlower))
+        println("vxmin = $vxmin, xdist = $(xdistance(time, vxmin))")
+        
+        vxmax = searchsortedfirst(1:xupper, 99999, lt=(v1,v2)->(xdistance(time, v1)<xupper)) # && xdistance(time, v2)<xupper))
+        while xdistance(time, vxmax) > xupper
+            vxmax -= 1
+        end
+        println("vxmax = $vxmax, xdist = $(xdistance(time, vxmax))")
+        if xlower <= xdistance(time, vxmax) <= xupper && xlower <= xdistance(time, vxmin) <= xupper 
+            append!(xs, vxmin:vxmax)
+            println("xs = $xs")
+            #println()
+        end
 
-        v = minvx
-        display((v*(v+1)/2) - ((v-t) * (v-t+1) / 2))
+        println("Adding $(size(xs,1)*size(ys,1))")
+        total += size(xs,1)*size(ys,1)
+        toadd = [[x,y] for x in xs, y in ys]
+        if length(intersect(combos, toadd)) > 0
+            println("Intersection: $(intersect(combos, toadd))")
+        end
+        union!(combos, toadd)
+        #break
         println()
-        v = maxvx
-        display((v*(v+1)/2) - ((v-t) * (v-t+1) / 2))
-        println()
-        # xpos after t = (v*(v+1)/2) - ((v-t) * (v-t+1) / 2)
-        # 2pos = v*(v+1) - (v-t)*(v-t+1)
-        # 2pos = v^2 + v - v^2 + vt - v + vt - t^2 + t
-        #      = 2vt - t^2 + t
-        # 2vt = 2pos + t^2 - t
-        # v = (2pos + t^2 - t) / 2t 
-
-        break
     end
+    println("Raw Total $total")
+    println("Total $(length(combos))")
 end
