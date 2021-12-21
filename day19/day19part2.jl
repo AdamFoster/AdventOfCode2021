@@ -24,7 +24,10 @@ open(demo ? "day19/demoinput" : "day19/input", "r") do f # demoinput
         line = readline(f)
     end
 
+    processedScanners = Scanner[]
     s0 = popfirst!(scanners)
+    offsetScanner!(s0, [0,0,0])
+    push!(processedScanners, s0)
     canonicalScanner.beacons = deepcopy(s0.beacons)
     canonicalScanner.x = 0
     canonicalScanner.y = 0
@@ -113,6 +116,7 @@ open(demo ? "day19/demoinput" : "day19/input", "r") do f # demoinput
                 println("Adding $(length(beaconsToAdd)) beacons")
                 append!(s0.beacons, beaconsToAdd)
                 calculateDistances!(s0)
+                push!(processedScanners, s)
             end
         end
 
@@ -122,5 +126,12 @@ open(demo ? "day19/demoinput" : "day19/input", "r") do f # demoinput
         #end
     end
 
-    println("Total beacons: $(length(canonicalScanner.beacons))") #430
+    #println()
+    #println()
+    #display(processedScanners)
+    #println()
+    println()
+    distances = [abs(b2.x-b1.x) + abs(b2.y-b1.y) + abs(b2.z-b1.z) for b1 in processedScanners, b2 in processedScanners]
+    println("Max manhattan: $(reduce(max, distances))")
+    
 end
