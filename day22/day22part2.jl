@@ -62,7 +62,7 @@ function splitAbyB(asource::Block, b::Block)
     return splitblocks
 end
 
-demo = true
+demo = false
 
 # Algo:
 # Check if instruction intersects with existing blocks
@@ -110,35 +110,36 @@ function startEngine(instructions::Vector{Instruction})
     return onblocks
 end
 
-
-open(demo ? "day22/demoinput" : "day22/input", "r") do f # demoinput
-    help()
-    line = readline(f)
-
-    instructions = Instruction[]
-
-    while line != ""
-        matches = match(r"^([^ ]+) x=([^,]+),y=([^,]+),z=(.+)", line)
-        on = (matches[1] == "on")
-        xlower, xupper = [parse(Int64, x) for x in split(matches[2], "..")]
-        ylower, yupper = [parse(Int64, x) for x in split(matches[3], "..")]
-        zlower, zupper = [parse(Int64, x) for x in split(matches[4], "..")]
-        #xrange = xlower:xupper
-        #yrange = ylower:yupper
-        #zrange = zlower:zupper
-        push!(instructions, Instruction(on, Block(xlower, xupper, ylower, yupper, zlower, zupper)))
+function process()
+    open(demo ? "day22/demoinput2" : "day22/input", "r") do f # demoinput
+        help()
         line = readline(f)
-    end
 
-    engine = startEngine(instructions)
-    println("Engine:")
-    display(engine)
-    println("\n")
-    total = 0
-    for b in engine
-        total += (b.xmax-b.xmin+1)*(b.ymax-b.ymin+1)*(b.zmax-b.zmin+1)
+        instructions = Instruction[]
+
+        while line != ""
+            matches = match(r"^([^ ]+) x=([^,]+),y=([^,]+),z=(.+)", line)
+            on = (matches[1] == "on")
+            xlower, xupper = [parse(Int64, x) for x in split(matches[2], "..")]
+            ylower, yupper = [parse(Int64, x) for x in split(matches[3], "..")]
+            zlower, zupper = [parse(Int64, x) for x in split(matches[4], "..")]
+            #xrange = xlower:xupper
+            #yrange = ylower:yupper
+            #zrange = zlower:zupper
+            push!(instructions, Instruction(on, Block(xlower, xupper, ylower, yupper, zlower, zupper)))
+            line = readline(f)
+        end
+
+        engine = startEngine(instructions)
+        println("Engine:")
+        display(engine)
+        println("\n")
+        total = 0
+        for b in engine
+            total += (b.xmax-b.xmin+1)*(b.ymax-b.ymin+1)*(b.zmax-b.zmin+1)
+        end
+        println("Total on: $(total)") # 1134725012490723
     end
-    println("Total on: $(total)") # 
 end
 
 function test()
@@ -164,4 +165,27 @@ function test()
     println()
 end
 
+function test2()
+    instructions = Instruction[]
+    #push!(instructions, Instruction(1, Block(0,2,0,2,0,2)))
+    #push!(instructions, Instruction(1, Block(-1,1,0,0,0,0)))
+
+    push!(instructions, Instruction(1, Block(10,12,10,12,10,12)))
+    push!(instructions, Instruction(1, Block(11,13,11,13,11,13)))
+    push!(instructions, Instruction(0, Block(9,11,9,11,9,11)))
+    push!(instructions, Instruction(1, Block(10,10,10,10,10,10)))
+
+    engine = startEngine(instructions)
+    println("Engine:")
+    display(engine)
+    println("\n")
+    total = 0
+    for b in engine
+        total += (b.xmax-b.xmin+1)*(b.ymax-b.ymin+1)*(b.zmax-b.zmin+1)
+    end
+    println("Total on: $(total)") # 
+end
+
+#test2()
 #test()
+process()
