@@ -1,10 +1,5 @@
 using OffsetArrays
 
-mutable struct Instruction
-    on::Bool
-    block::Block
-end
-
 mutable struct Block
     xmin::Int64
     xmax::Int64
@@ -14,17 +9,26 @@ mutable struct Block
     zmax::Int64
 end
 
+mutable struct Instruction
+    on::Bool
+    block::Block
+end
+
 import Base.==
-==(a::Block,b::Block) = a.xmin==b.xmin && a.xmax==b.xmax &&
-                        a.ymin==b.ymin && a.ymax==b.ymax &&
-                        a.zmin==b.zmin && a.zmax==b.zmax &&
+==(a::Block,b::Block) = a.xmin==b.xmin && a.xmax==b.xmax && a.ymin==b.ymin && a.ymax==b.ymax && a.zmin==b.zmin && a.zmax==b.zmax
 
+function help()
+    println("Help!")
+end
 
-function intersect(a::Block, b::Block)
+function intersects(a::Block, b::Block)
     return (a.xmin <= b.xmax && a.xmax >= b.xmin) &&
            (a.ymin <= b.ymax && a.ymax >= b.ymin) &&
            (a.zmin <= b.zmax && a.zmax >= b.zmin);
 end
+
+
+
 
 function splitAbyB(asource::Block, b::Block)
     a = deepcopy(asource)
@@ -71,35 +75,44 @@ function startEngine(instructions::Vector{Instruction})
 
     for inst in instructions
         if inst.on # turn on - add blocks to onblocks
-            blocksToAdd = [inst.block] # this should always be a disjoint set
-            for block in onblocks
+            blocksToAdd = Block[inst.block] # this should always be a disjoint set
+            for block::Block in onblocks
                 addedPieces = Block[]
                 removedBlocks = Block[]
-                for blockToAdd in blocksToAdd
+                for blockToAdd::Block in blocksToAdd
                     if intersects(block, blockToAdd)
                         println("On Intersection between $block and $blockToAdd")
                         append!(addedPieces, splitAbyB(blockToAdd, block)) # split the incoming block - remove the part of it that already exists
-                        push!(removedBlocks, blockToAdd)
+                        push!(removedBlocks, blockToAdd) # mark the original as to be removed
                     end
                 end
                 filter!(b->!(b in removedBlocks), blocksToAdd)
                 append!(blocksToAdd, addedPieces)
             end
-        else
-            blocksToRemove = []
+            append!(onblocks, blocksToAdd)
+        else # turn off - split block in onblocks
             #fill in some magic here
-            for r in blocksToRemove
-                filter!(a->a!=r, onblocks)
+            addedPieces = Block[]
+            removedBlocks = Block[]
+            for block in onblocks
+                if intersects(block, inst.block)
+                    println("Off Intersection between $block and $(inst.block)")
+                    splitBlocks = splitAbyB(block, inst.block)
+                    append!(addedPieces, splitBlocks)
+                    push!(removedBlocks, block)
+                end
             end
+            filter!(b->!(b in removedBlocks), onblocks)
+            append!(onblocks, addedPieces)
         end
     end
 
-
-
-    return 1
+    return onblocks
 end
 
+
 open(demo ? "day22/demoinput" : "day22/input", "r") do f # demoinput
+    help()
     line = readline(f)
 
     instructions = Instruction[]
@@ -118,7 +131,37 @@ open(demo ? "day22/demoinput" : "day22/input", "r") do f # demoinput
     end
 
     engine = startEngine(instructions)
-
-    #println("Total on: $(reduce(+, engine))") # 580098
+    println("Engine:")
+    display(engine)
+    println("\n")
+    total = 0
+    for b in engine
+        total += (b.xmax-b.xmin+1)*(b.ymax-b.ymin+1)*(b.zmax-b.zmin+1)
+    end
+    println("Total on: $(total)") # 
 end
 
+function test()
+    println("Test splitting block on corner")
+    b1 = Block(0,1,0,1,0,1)
+    b2 = Block(0,2,0,2,0,2)
+    s = splitAbyB(b2, b1)
+    display(s)
+    println("\n")
+
+    println("Test block that shouldn't have anything left")
+    b1 = Block(0,1,0,1,0,1)
+    b2 = Block(0,2,0,2,0,2)
+    s = splitAbyB(b1, b2)
+    display(s)
+    println()
+
+    println("Test block split in middle")
+    b1 = Block(0,1,0,1,0,1)
+    b2 = Block(-1,2,-1,2,-1,2)
+    s = splitAbyB(b2, b1)
+    display(s)
+    println()
+end
+
+#test()
