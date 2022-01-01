@@ -1,3 +1,5 @@
+using DataStructures
+
 demo = true
 
 VALID_CORRIDORS = Set([1,2,4,6,8,10,11])
@@ -9,12 +11,48 @@ mutable struct Room
     size::Int
     corridorAttachment::Int
     Room(type::Int, stringContents::String) = new(type, [Int(Char(c))-Int('A')+1 for c in reverse(stringContents)], ROOM_SIZE, 2*type+1)
+    Room(type::Int, contents::Array{Int}) = new(type, contents, ROOM_SIZE, 2*type+1)
 end
 
 mutable struct Move
     rooms::Vector{Room}
     corridor::Array
     cost::Int
+end
+
+import Base.==
+==(a::Move,b::Move) = a.rooms==b.rooms && a.corridor==b.corridor
+==(a::Room,b::Room) = a.type==b.type && a.contents==b.contents
+
+Base.hash(m::Move, h::UInt) = Base.hash(m.rooms, h) + Base.hash(m.corridor, h)
+Base.isequal(a::Move,b::Move) = a == b
+
+function printmoves(moves::Vector{Move})
+    for m in moves
+        printmove(m)
+    end
+end
+
+function printmove(m::Move)
+    for r in m.rooms
+        rc = deepcopy(r.contents)
+        push!(rc, 0)
+        push!(rc, 0)
+        for i in 1:2
+            print(rc[i])
+        end
+        print(" ")
+    end
+    print(": ")
+    for c in m.corridor
+        print(c)
+    end
+    print(" = $(m.cost)")
+    println()
+end
+
+function attachmentPoint(letter::Int)
+    return 2*letter+1
 end
 
 function roomsDone(rooms::Vector{Room})
@@ -83,12 +121,6 @@ function possibleRoomMoves(rooms::Vector{Room}, corridor::Vector{Int}, roomNumbe
         return moves
     end
     if length(rooms[roomNumber].contents) == 0
-        #println("Room $roomNumber is empty")
-        #println("Rooms:")
-        #display(rooms)
-        #println("\nCorridor: $corridor")
-        #println("\n")
-        #exit()
         return moves
     end
 
@@ -98,7 +130,8 @@ function possibleRoomMoves(rooms::Vector{Room}, corridor::Vector{Int}, roomNumbe
     maxEmptyCorridor = corridorAttachment
     letter = last(rooms[roomNumber].contents)
     if letter == 0
-        println("Why does room $roomNumber have a 0? $rooms")
+        println("!!! Why does room $roomNumber have a 0? $rooms")
+        exit()
         return moves
     end
 
@@ -115,10 +148,28 @@ function possibleRoomMoves(rooms::Vector{Room}, corridor::Vector{Int}, roomNumbe
         maxEmptyCorridor = i
     end
 
+    # check if it can go straight to the right room
+    if attachmentPoint(letter) in minEmptyCorridor:maxEmptyCorridor # the target room is not blocked
+        if length(rooms[letter].contents) < rooms[letter].size # there is room
+            if length(filter(x->x!=letter, rooms[letter].contents)) == 0 # there isn't anything else incorrect in the room
+                distance = abs(attachmentPoint(letter)-corridorAttachment) # corridor distance
+                distance += 2*rooms[roomNumber].size - length(rooms[letter].contents) - length(rooms[roomNumber].contents) + 1
+                moverooms = deepcopy(rooms)
+                pop!(moverooms[roomNumber].contents)
+                push!(moverooms[letter].contents, letter)
+                movecorridor = deepcopy(corridor)
+                movecost = 10^(letter-1) * distance
+                move = Move(moverooms, movecorridor, movecost) #rooms, corridor, cost
+                push!(moves, move)
+                return moves
+            end
+        end
+    end
+
     # room to corridor move
     possibleDestinations = intersect(VALID_CORRIDORS, minEmptyCorridor:maxEmptyCorridor)
     for c in possibleDestinations
-        distance = abs(c-corridorAttachment) + rooms[roomNumber].size - length(rooms[roomNumber].contents)
+        distance = abs(c-corridorAttachment) + rooms[roomNumber].size - length(rooms[roomNumber].contents) + 1
 
         moverooms = deepcopy(rooms)
         pop!(moverooms[roomNumber].contents)
@@ -136,7 +187,7 @@ function possibleRoomMoves(rooms::Vector{Room}, corridor::Vector{Int}, roomNumbe
 end
 
 
-function possibleMoves(rooms::Vector{Room}, corridor::Vector{Int})
+function possibleMoves(rooms::Vector{Room}, corridor::Vector{Int})::Vector{Move}
     moves = Vector{Move}()
 
     for ci in 1:length(corridor)
@@ -158,7 +209,7 @@ function minCost(rooms::Vector{Room}, corridor::Vector{Int}, depth::Int)
         return 0
     else
         cost = 0
-        pms = possibleMoves(rooms::Vector{Room}, corridor::Array)
+        pms = possibleMoves(rooms, corridor)
         if length(pms) == 0
             #println("No possible moves for $rooms $corridor")
             cost = typemax(Int32)
@@ -179,43 +230,109 @@ function minCost(rooms::Vector{Room}, corridor::Vector{Int}, depth::Int)
     end
 end
 
+function h(m::Move)
+    hcost = 0
+
+    #letters in the corridor costs
+    for i in 1:length(m.corridor)
+        if m.corridor[i] != 0
+            letter = m.corridor[i]
+            hcost += 10^(letter-1) * (abs(attachmentPoint(letter) - i) + 1)
+            #movecost = 10^(letter-1) * (abs(corridorIndex-rooms[letter].corridorAttachment) + rooms[letter].size-length(rooms[letter].contents))
+        end
+    end
+
+    #room costs
+    for r in 1:length(m.rooms)
+        for i in 1:length(m.rooms[r].contents)
+            if m.rooms[r].contents[i] != r
+                letter = m.rooms[r].contents[i]
+                cost = 10^(letter-1) * (abs(attachmentPoint(letter) - attachmentPoint(r)) + 1 + 2-i+1)
+                hcost += cost
+            end
+        end
+    end
+
+    return hcost
+end
+
+function reconstruct_path(cameFrom, current)
+    total_path = [current]
+    while haskey(cameFrom, current)
+        current = cameFrom[current]
+        pushfirst!(total_path, current)
+    end
+    return total_path
+end
+
+function astar(start::Move, goal::Move)
+    openSet = PriorityQueue{Move, Int}()
+    enqueue!(openSet, start, 0)
+
+    cameFrom = Dict{Move, Move}()
+
+    gScore = Dict{Move, Int}() # defaults to infinity
+    gScore[start] = 0
+
+    fScore = Dict{Move, Int}() # defaults to infinity
+    fScore[start] = h(start)
+
+    while length(openSet) > 0
+        current = dequeue!(openSet)
+        if current == goal
+            return reconstruct_path(cameFrom, current)
+            #display(cameFrom)
+        end
+
+        neighbours::Vector{Move} = possibleMoves(current.rooms, current.corridor)
+        for n::Move in neighbours
+            tentative_gScore = haskey(gScore, current) ? (gScore[current] + n.cost) : typemax(Int32)
+            if !haskey(gScore, n) || tentative_gScore < gScore[n]
+                cameFrom[n] = current
+                gScore[n] = tentative_gScore
+                fScore[n] = tentative_gScore + h(n)
+                if !haskey(openSet, n)
+                    enqueue!(openSet, n, tentative_gScore + h(n))
+                else
+                    openSet[n] = tentative_gScore + h(n)
+                end
+            end
+        end
+    end
+    println("Couldn't find valid path")
+end
+
 function process(initialRooms::Array{String})
     done = false
     corridor = fill(0, 11)
     rooms = [Room(r, initialRooms[r]) for r in 1:4]
+    endrooms = [Room(r, [r,r]) for r in 1:4]
 
     display(rooms)
     println()
 
-    cost = minCost(rooms, corridor, 0)
+    #cost = minCost(rooms, corridor, 0)
+    path = astar(Move(rooms, corridor, 0), Move(endrooms, corridor, 0)) 
 
     println()
     println("***")
-    display(cost)
+    printmoves(path)
     println()
     println("***")
-
-    #while !done
-    #    if count(c->c!==nothing, corridor) == 0
-    #        # corridor is empty
-    #        println("Corridor empty")
-    #        if roomsDone(rooms)
-    #            println("Rooms done")
-    #            done = true
-    #        end
-    #    end
-    #    if !done
-    #        # there are moves to do
-    #        println("Corridor = $corridor")
-    #        # generate possible room moves
-    #    end
-    #    break
-    #end
+    totalCost = 0
+    for m::Move in path
+        totalCost += m.cost
+    end
+    println("Total Cost = $totalCost")
 end
 
 
 function testdemo()
     process(["BA", "CD", "BC", "DA"])
+end
+
+function testreal()
+    process(["AD", "CD", "BB", "AC"])
 end
 
 function testPossibleCorridorMoves()
@@ -267,7 +384,9 @@ function testPossibleRoomMoves()
     corridor = fill(0, 11)
     rooms = [Room(r, ["BA", "CD", "BC", "DA"][r]) for r in 1:4]
     moves = possibleRoomMoves(rooms, corridor, 1)
-    println("Corridor empty: $moves should be full")
+    println("Corridor empty: should be full")
+    printmoves(moves)
+    println()
     println()
 
     corridor[2] = 1
@@ -275,18 +394,28 @@ function testPossibleRoomMoves()
     moves = possibleRoomMoves(rooms, corridor, 1)
     println("Blocked corridor: $moves should be empty")
     println()
-end
 
-function testPossibleRoomMoves()
     corridor = fill(0, 11)
     rooms = [Room(r, ["BA", "CD", "BC", "DA"][r]) for r in 1:4]
     moves = possibleRoomMoves(rooms, corridor, 1)
-    println("Corridor empty: $moves should be full")
+    println("Corridor empty: should be full")
+    printmoves(moves)
     println()
+    println()
+
+    rooms = [Room(r, ["BA", "DC", "BC", "D"][r]) for r in 1:4]
+    moves = possibleRoomMoves(rooms, corridor, 2)
+    println("Should be a direct move to D")
+    printmoves(moves)
+    println()
+    println()
+
 end
 
 #testPossibleRoomMoves()
 #testPossibleCorridorMoves()
-testdemo()
+#testdemo()
+testreal() # 18195
+#testdemo()
 #testtest()
 
