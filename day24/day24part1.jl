@@ -22,25 +22,72 @@ mutable struct Instruction
     Instruction(type::String, target::String, source::Union{Int, String}) = new(type, F[type], target, source)
 end
 
-function process(instructions::Vector{Vector{Instruction}})
+function process(instructionGroups::Vector{Vector{Instruction}})
     registers::Vector{Int} = fill(0, 4) #w=1,x=2,y=3,z=4
-    inps::Vector{Int} = fill(0, length(instructions))
-    zs::Vector{Int} = fill(0, length(instructions))
+    inps::Vector{Int} = fill(9, length(instructionGroups))
+    zs::Vector{Int} = fill(0, length(instructionGroups))
 
-    println("Registers:")
-    display(registers)
-    println("\n")
-    println("Instructions:")
-    display(instructions)
-    println("\n")
+    cache = Dict{Int, Dict{Int, Int}}() 
+    cache[0] = Dict{Int, Int}(0=>0) #group[0] z=0 maxinp=0
+
+    # idea - change direction of this loop - go from 9999.....11111 instead of 1-9, 1-9....
+    done = false
+    while !done
+        for (igIndex, ig) in enumerate(instructionGroups)
+            cache[igIndex] = Dict{Int, Int}()
+            registers = fill(0, 4)
+
+            for z in keys(cache[igIndex-1])
+                registers[4] = z
+
+                for inp in 1:9
+                    regs = runGroup(ig, registers, inp)
+                    #println("$igIndex @ ($inp,$z) -> $(regs[4])")
+                    cache[igIndex][regs[4]] = inp
+                end
+            end
+
+            println("\n\nCache size @$igIndex = $(length(cache[igIndex]))")
+            debug = 0
+            if igIndex == debug
+                println("Cache:")
+                display(cache[debug])
+                println("\n\nCache size = $(length(cache[debug]))")
+                    break
+            end
+        end
+
+        done = true
+    end
+
+
+    #println("Registers:")
+    #display(registers)
+    #println("\n")
+    #println("Instructions:")
+    #display(instructionGroups)
+    #println("\n")
 end
 
-function runProgram(instructions::Vector{Vector{Instruction}}, inputs::Vector{Int})
-    registers::Vector{Int} = fill(0, 4) #w=1,x=2,y=3,z=4
-    inps::Vector{Int} = fill(0, length(instructions))
-    zs::Vector{Int} = fill(0, length(instructions))
+function runGroup(instructions::Vector{Instruction}, initialRegisters::Vector{Int}, input::Int)::Vector{Int}
+    registers = deepcopy(initialRegisters)
+    registers[R["w"]] = input
+    for inst in instructions
+        if inst.source isa String # register
+            registers[R[inst.target]] = inst.f(registers[R[inst.target]], registers[R[inst.source]])
+        else # literal
+            registers[R[inst.target]] = inst.f(registers[R[inst.target]], inst.source)
+        end
+    end
+    return registers
+end
 
-    for (groupIndex, instructionGroup) in enumerate(instructions)
+function runProgram(instructionGroups::Vector{Vector{Instruction}}, inputs::Vector{Int})
+    registers::Vector{Int} = fill(0, 4) #w=1,x=2,y=3,z=4
+    inps::Vector{Int} = fill(0, length(instructionGroups))
+    zs::Vector{Int} = fill(0, length(instructionGroups))
+
+    for (groupIndex, instructionGroup) in enumerate(instructionGroups)
         registers[R["w"]] = inputs[groupIndex]
         for inst in instructionGroup
             if inst.source isa String # register
@@ -98,10 +145,7 @@ open(demo ? "day24/demoinput" : "day24/input", "r") do f # demoinput
     end
     push!(instructions, instructionBatch)
 
-    #process(instructions)
+    process(instructions)
 
-
-
-    
 #    runProgram(instructions, [parse(Int, c) for c in split("23579246899999", "")])
 end
