@@ -27,27 +27,31 @@ function process(instructionGroups::Vector{Vector{Instruction}})
     inps::Vector{Int} = fill(9, length(instructionGroups))
     zs::Vector{Int} = fill(0, length(instructionGroups))
 
-    cache = Dict{Int, Dict{Int, Int}}() 
-    cache[0] = Dict{Int, Int}(0=>0) #group[0] z=0 maxinp=0
+    cache = Dict{Int, Dict{Int, Vector{Int}}}() 
+    cache[0] = Dict{Int, Vector{Int}}(0=>[0, 0, 0]) #group[0] z=0 maxinp=0, [input, zprev, max]
 
     # idea - change direction of this loop - go from 9999.....11111 instead of 1-9, 1-9....
     done = false
     while !done
         for (igIndex, ig) in enumerate(instructionGroups)
-            cache[igIndex] = Dict{Int, Int}()
-            registers = fill(0, 4)
-
+            cache[igIndex] = Dict{Int, Vector{Int}}()
+            
             for z in keys(cache[igIndex-1])
-                registers[4] = z
-
                 for inp in 1:9
-                    regs = runGroup(ig, registers, inp)
+                    regs = runGroup(ig, z, inp)
                     #println("$igIndex @ ($inp,$z) -> $(regs[4])")
-                    cache[igIndex][regs[4]] = inp
+                    localmax = cache[igIndex-1][z][3]*10 + inp
+                    if haskey(cache[igIndex], regs[4])
+                        if localmax > cache[igIndex][regs[4]][3]
+                            cache[igIndex][regs[4]] = [inp, z, localmax]
+                        end
+                    else
+                        cache[igIndex][regs[4]] = [inp, z, localmax]
+                    end
                 end
             end
 
-            println("\n\nCache size @$igIndex = $(length(cache[igIndex]))")
+            println("Cache size @$igIndex = $(length(cache[igIndex]))")
             debug = 0
             if igIndex == debug
                 println("Cache:")
@@ -60,6 +64,11 @@ function process(instructionGroups::Vector{Vector{Instruction}})
         done = true
     end
 
+    zprev = 0
+    for i in length(instructionGroups):-1:1
+        println("i: $(cache[i][zprev])")
+        zprev = cache[i][zprev][2]
+    end
 
     #println("Registers:")
     #display(registers)
@@ -67,6 +76,20 @@ function process(instructionGroups::Vector{Vector{Instruction}})
     #println("Instructions:")
     #display(instructionGroups)
     #println("\n")
+end
+
+function runGroup(instructions::Vector{Instruction}, z::Int, input::Int)::Vector{Int}
+    registers = fill(0, 4)
+    registers[1] = input
+    registers[4] = z
+    for inst in instructions
+        if inst.source isa String # register
+            registers[R[inst.target]] = inst.f(registers[R[inst.target]], registers[R[inst.source]])
+        else # literal
+            registers[R[inst.target]] = inst.f(registers[R[inst.target]], inst.source)
+        end
+    end
+    return registers
 end
 
 function runGroup(instructions::Vector{Instruction}, initialRegisters::Vector{Int}, input::Int)::Vector{Int}
@@ -145,7 +168,9 @@ open(demo ? "day24/demoinput" : "day24/input", "r") do f # demoinput
     end
     push!(instructions, instructionBatch)
 
-    process(instructions)
+    process(instructions) # 93499629698999
 
-#    runProgram(instructions, [parse(Int, c) for c in split("23579246899999", "")])
+    # registers = runProgram(instructions, [parse(Int, c) for c in split("31497418154473", "")]) # 31497418154473 is too low
+#    display(registers)
+    println()
 end
